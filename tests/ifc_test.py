@@ -1,9 +1,10 @@
 import cocotb
-from cocotb.triggers import timer, RisingEdge, ReadOnly, NextTimeStep
-from cocotb_bus.driver import busDriver
+from cocotb.triggers import Timer, RisingEdge, ReadOnly, NextTimeStep
+from cocotb_bus.drivers import BusDriver
 
-def callback(actual_value):
-    assert actual_value == expected_value
+def sb_fn(actual_value):
+    global expected_value
+    assert actual_value == expected_value.pop(0), "Scoreboard Matching Failed"
 
 @cocotb.test()
 async def or_test(dut):
@@ -17,40 +18,41 @@ async def or_test(dut):
     await Timer(1, 'ns')
     await RisingEdge(dut.CLK)
     dut.RST_N.value = 1
-    adrv = InputDriver(dut, 'a', dut.clk)
+    adrv = InputDriver(dut, 'a', dut.CLK)
     bdrv = InputDriver(dut, 'b', dut.CLK)
-    OutputDriver(dut,'y',dut.CLK, cb_fn)
+    OutputDriver(dut, 'y', dut.CLK, sb_fn)
 
 
 
     for i in range(4):
         adrv.append(a[i])
         bdrv.append(b[i])
-    while len(expected_value)>0:
-        await(Timer(2, 'ns'))
+    while len(expected_value) > 0:
+        await Timer(2, 'ns')
 
 
 class InputDriver(BusDriver):
-    _signams-['rdy', 'en', 'data']
+    _signals = ['rdy', 'en', 'data']
 
     def __init__(self, dut, name, clk):
         BusDriver.__init__(self, dut, name, clk)
         self.bus.en.value = 0
         self.clk=clk
+
     async def driver_send(self, value, sync=True):
         if self.bus.rdy.value != 1:
             await RisingEdge(self.but.rdy)
-        self.bus.en = 1
-        self.bus.data = value
-       await ReadOnly()
-       await RisingEdge(self.clk)
-       self.bus.en = 0
-       await NextTimeStep()
+        self.bus.en.value = 1
+        self.bus.data.value = value
+        await ReadOnly()
+        await RisingEdge(self.clk)
+        self.bus.en.value = 0
+        await NextTimeStep()
 
 class OutputDriver(BusDriver):
-    _signams-['rdy', 'en', 'data']
+    _signals = ['rdy', 'en', 'data']
 
-    def __init__(self, dut, name, clk, sb_callabck):
+    def __init__(self, dut, name, clk, sb_callback):
         BusDriver.__init__(self, dut, name, clk)
         self.bus.en.value = 0
         self.clk=clk
@@ -61,10 +63,11 @@ class OutputDriver(BusDriver):
         while True:
             if self.bus.rdy.value != 1:
                 await RisingEdge(self.but.rdy)
-            self.bus.en = 1
+            self.bus.en.value = 1
             await ReadOnly()
-            self.callback(self.bus.data.valye)
+            self.callback(self.bus.data.value)
             await RisingEdge(self.clk)
-            self.bus.en = 0
-            await NextTimeStep()
+            await NextTimeStep
+            self.bus.en.value = 0
+            
 
